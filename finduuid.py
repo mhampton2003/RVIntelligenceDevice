@@ -4,7 +4,7 @@
  Emmanuel Loria, Jordan Krause, Maya Hampton
  Date 1/17/2025
  Script to find the characteristic UUID
- 
+ https://chatgpt.com/share/67980992-6ca8-8001-87fc-cebf0592585a
 ==================================================
 """
 import asyncio
