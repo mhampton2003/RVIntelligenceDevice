@@ -1,3 +1,14 @@
+/**
+=================================================================
+ RV Intelligence Device
+ Emmanuel Loria, Jordan Krause, Maya Hampton
+ Date 12/4/2024
+ Script to connect ESP32 camera to Pi 5 via WiFi
+ https://docs.arduino.cc/tutorials/giga-r1-wifi/giga-camera/
+    > used to connect camera to pi via wifi
+=================================================================
+**/
+
 #include "esp_camera.h"
 #include <WiFi.h>
 
