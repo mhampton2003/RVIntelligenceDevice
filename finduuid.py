@@ -1,12 +1,14 @@
 """
-================================================= 
+=================================================================
  RV Intelligence Device
  Emmanuel Loria, Jordan Krause, Maya Hampton
  Date 1/17/2025
- Script to find the characteristic UUID
+ Script to find the characteristic UUID for the Mopeka Sensors
  https://chatgpt.com/share/67980992-6ca8-8001-87fc-cebf0592585a
-==================================================
+    > used to learn how to find the UUID for the Mopeka Sensors
+=================================================================
 """
+
 import asyncio
 from bleak import BleakClient
 
