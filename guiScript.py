@@ -23,6 +23,7 @@ def fetch_data():
     temp1 = ""
     temp2 = ""
 
+    # loop to continuously get temperature data
     while True:
         if esp1.in_waiting > 0:
             temp1 = f"{esp1.readline().decode().strip()} C"
@@ -32,15 +33,17 @@ def fetch_data():
 
         return temp1, temp2
 
-# continually gets data and assigns it
-# creates labels for the data
+# updates the temperature on the screen 
 def update_data(page, temp1_label_var, temp2_label_var):
+    # get updated data, set the variable, print the data to the screen every 2 seconds
     temp1, temp2 = fetch_data()
-    temp1_label_var.set(f"Temperature Sensor 1: {temp1}")
-    temp2_label_var.set(f"Temperature Sensor 2: {temp2}")
+    temp1_label_var.set(f"Refridgerator Temperature: {temp1}")
+    temp2_label_var.set(f"Freezer Temperature: {temp2}")
     page.after(2000, lambda: update_data(page, temp1_label_var, temp2_label_var))
 
+# main application class for the GUI
 class MainApp(tk.Tk):
+    # sets up the window
     def __init__(self):
         super().__init__()
         self.title("Main Menu")
@@ -59,11 +62,12 @@ class MainApp(tk.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.show_page("MainMenu")
-
+    # display the specified page at the front of the window
     def show_page(self, page_name):
         frame = self.pages[page_name]
         frame.tkraise()
 
+# main menu page class
 class MainMenu(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -95,6 +99,7 @@ class MainMenu(ttk.Frame):
                                command=lambda: controller.show_page("WaterPage"))
         btn_water.grid(row=3, column=1, sticky="nsew", padx=10, pady=10)
 
+# temperature class page
 class TemperaturePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -119,24 +124,28 @@ class TemperaturePage(ttk.Frame):
         # Update data
         update_data(self, temp1_label_var, temp2_label_var)
 
+# camera page class
 class CameraPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Camera Feed Page", font=("Helvetica", 20)).pack(pady=20)
         ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
+# propane tank page class
 class PropanePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Propane Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
         ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
+# water tank page class
 class WaterPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Water Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
         ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
+# runs the application
 if __name__ == "__main__":
     app = MainApp()
     app.mainloop()
