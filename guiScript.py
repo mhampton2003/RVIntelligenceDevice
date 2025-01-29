@@ -15,62 +15,128 @@ import serial
 import time
 
 # assigning ESP32s to a serial port
-esp1 = serial.Serial('/dev/rfcomm1',115200,timeout=1)
-esp2 = serial.Serial('/dev/rfcomm2',115200,timeout=1)
+esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
+esp2 = serial.Serial('/dev/rfcomm2', 115200, timeout=1)
 
 # gets the data from the various sensors
 def fetch_data():
-    water_level = ""
-    propane_level = ""
-   
-    while True: 
-        if esp1.in_waiting > 0:
-            water_level = f"{esp1.readline().decode()}%" 
-        if esp2.in_waiting > 0:
-            propane_level = f"{esp2.readline().decode()}%" 
-        time.sleep(0.1) 
+    temp1 = ""
+    temp2 = ""
 
-        temperature = f"{random.uniform(20, 35):.1f} C"
-        return propane_level, water_level, temperature
+    while True:
+        if esp1.in_waiting > 0:
+            temp1 = f"{esp1.readline().decode().strip()} C"
+        if esp2.in_waiting > 0:
+            temp2 = f"{esp2.readline().decode().strip()} C"
+        time.sleep(0.1)
+
+        return temp1, temp2
 
 # continually gets data and assigns it
 # creates labels for the data
-def update_data():
-        propane_level, water_level, temperature = fetch_data()
-        propane_label_var.set(f"Propane Tank Level: {propane_level}")
-        water_label_var.set(f"Water Tank Level: {water_level}")
-        temp_label_var.set(f"Temperature: {temperature}")
-        root.after(2000, update_data)
+def update_data(page, temp1_label_var, temp2_label_var):
+    temp1, temp2 = fetch_data()
+    temp1_label_var.set(f"Temperature Sensor 1: {temp1}")
+    temp2_label_var.set(f"Temperature Sensor 2: {temp2}")
+    page.after(2000, lambda: update_data(page, temp1_label_var, temp2_label_var))
 
-# initializes Tkinter window with title and initial size
-root = tk.Tk()
-root.title("Tank Levels & Temperature")
-root.geometry("400x300")
+class MainApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Main Menu")
+        self.geometry("600x400")
 
-# provides styling
-style = ttk.Style()
-style.configure("TLabel", font=("Arial", 14))
+        self.container = ttk.Frame(self)
+        self.container.pack(fill="both", expand=True)
 
-# creates data labels as strings
-propane_label_var = tk.StringVar()
-water_label_var = tk.StringVar()
-temp_label_var = tk.StringVar()
+        self.pages = {}
 
-# sets the labels
-propane_label_var.set("Propane Tank Level: --%")
-water_label_var.set("Water Tank Level: --%")
-temp_label_var.set("Temperature: --C")
+        # Initialize all pages
+        for Page in (MainMenu, TemperaturePage, CameraPage, PropanePage, WaterPage):
+            page_name = Page.__name__
+            frame = Page(parent=self.container, controller=self)
+            self.pages[page_name] = frame
+            frame.grid(row=0, column=0, sticky="nsew")
 
-# displays data under respective label
-ttk.Label(root, textvariable=propane_label_var).pack(pady=10)
-ttk.Label(root, textvariable=water_label_var).pack(pady=10)
-ttk.Label(root, textvariable=temp_label_var).pack(pady=10)
+        self.show_page("MainMenu")
 
-# creates button to exit GUI
-ttk.Button(root, text="Exit", command=root.quit).pack(pady=20)
+    def show_page(self, page_name):
+        frame = self.pages[page_name]
+        frame.tkraise()
 
-# get the data and run the GUI
-update_data()
-root.attributes('-fullscreen', True)
-root.mainloop()
+class MainMenu(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.controller = controller
 
+        # Set grid layout
+        self.columnconfigure(0, weight=1)
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure((0, 1, 2, 3), weight=1)
+
+        # Left-side label
+        label = tk.Label(self, text="Select A Menu", font=("Helvetica", 24), bg="lightgray", anchor="center")
+        label.grid(row=0, column=0, rowspan=4, sticky="nsew", padx=10, pady=10)
+
+        # Buttons
+        btn_temperature = tk.Button(self, text="View Temperature", font=("Helvetica", 14), bg="lightyellow",
+                                     command=lambda: controller.show_page("TemperaturePage"))
+        btn_temperature.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+
+        btn_camera = tk.Button(self, text="View Camera Feed", font=("Helvetica", 14), bg="lightblue",
+                                command=lambda: controller.show_page("CameraPage"))
+        btn_camera.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
+
+        btn_propane = tk.Button(self, text="View Propane Tank Levels", font=("Helvetica", 14), bg="lightgreen",
+                                 command=lambda: controller.show_page("PropanePage"))
+        btn_propane.grid(row=2, column=1, sticky="nsew", padx=10, pady=10)
+
+        btn_water = tk.Button(self, text="View Water Tank Levels", font=("Helvetica", 14), bg="#DDA0DD",
+                               command=lambda: controller.show_page("WaterPage"))
+        btn_water.grid(row=3, column=1, sticky="nsew", padx=10, pady=10)
+
+class TemperaturePage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+
+        # Styling
+        self.style = ttk.Style()
+        self.style.configure("TLabel", font=("Arial", 14))
+
+        # Create data labels as strings
+        temp1_label_var = tk.StringVar()
+        temp2_label_var = tk.StringVar()
+        temp1_label_var.set("Temperature Sensor 1: -- C")
+        temp2_label_var.set("Temperature Sensor 2: -- C")
+
+        # Display data
+        ttk.Label(self, textvariable=temp1_label_var).pack(pady=10)
+        ttk.Label(self, textvariable=temp2_label_var).pack(pady=10)
+
+        # Back button
+        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=20)
+
+        # Update data
+        update_data(self, temp1_label_var, temp2_label_var)
+
+class CameraPage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        ttk.Label(self, text="Camera Feed Page", font=("Helvetica", 20)).pack(pady=20)
+        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+
+class PropanePage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        ttk.Label(self, text="Propane Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
+        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+
+class WaterPage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        ttk.Label(self, text="Water Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
+        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+
+if __name__ == "__main__":
+    app = MainApp()
+    app.mainloop()
