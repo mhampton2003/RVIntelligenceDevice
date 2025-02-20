@@ -18,43 +18,51 @@ import time
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
 esp2 = serial.Serial('/dev/rfcomm2', 115200, timeout=1)
 
+
 # gets the data from the various sensors
 def fetch_data():
     temp1 = ""
     temp2 = ""
+    temp1_raw = ""
+    temp2_raw = ""
+    temp1_value = ""
+    temp2_value = ""
 
     # loop to continuously get temperature data
-    while True:
-        if esp1.in_waiting > 0:
-            temp1 = f"{esp1.readline().decode().strip()} C"
-        if esp2.in_waiting > 0:
-            temp2 = f"{esp2.readline().decode().strip()} C"
-        time.sleep(0.1)
-
-        return temp1, temp2
+    while(True): 
+       if esp1.in_waiting > 0:
+          temp1_raw = esp1.readline().decode().strip()
+          temp1_value = temp1_raw.split()[0] + " F\n                      " + temp1_raw.split()[1] if temp1_raw else "NA"
+          temp1 = f"{temp1_value} %" 
+       if esp2.in_waiting > 0:
+          temp2_raw = esp2.readline().decode().strip()  
+          temp2_value = temp2_raw.split()[0] if temp2_raw else "NA"
+          temp2 = f"{temp2_value} F" 
+       return temp1, temp2
 
 # updates the temperature on the screen 
 def update_data(page, temp1_label_var, temp2_label_var):
     # get updated data, set the variable, print the data to the screen every 2 seconds
     temp1, temp2 = fetch_data()
-    temp1_label_var.set(f"Refridgerator Temperature: {temp1}")
-    temp2_label_var.set(f"Freezer Temperature: {temp2}")
+    temp1_label_var.set(f"Cabin Temperature: {temp1}")
+    temp2_label_var.set(f"Fridge Temperature: {temp2}")
     page.after(2000, lambda: update_data(page, temp1_label_var, temp2_label_var))
 
 # main application class for the GUI
 class MainApp(tk.Tk):
-    # sets up the window
     def __init__(self):
         super().__init__()
         self.title("Main Menu")
-        self.geometry("600x400")
+        self.attributes("-fullscreen", True)
+        self.configure(bg="#004d00")  # Dark green background
+        self.wm_attributes("-alpha", 0.8)  # Set transparency to 80%
 
         self.container = ttk.Frame(self)
-        self.container.pack(fill="both", expand=True)
+        self.container.pack(expand=True, fill="both")
+        self.container.configure(style="Main.TFrame")
+      
+	self.pages = {}
 
-        self.pages = {}
-
-        # Initialize all pages
         for Page in (MainMenu, TemperaturePage, CameraPage, PropanePage, WaterPage):
             page_name = Page.__name__
             frame = Page(parent=self.container, controller=self)
@@ -62,44 +70,70 @@ class MainApp(tk.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
 
         self.show_page("MainMenu")
-    # display the specified page at the front of the window
+        self.bind("<Escape>", lambda event: self.attributes("-fullscreen", False))
+
     def show_page(self, page_name):
         frame = self.pages[page_name]
         frame.tkraise()
 
-# main menu page class
+
 class MainMenu(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+        self.configure(style="Main.TFrame")
 
-        # Set grid layout
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure((0, 1, 2, 3), weight=1)
+        # Make the MainMenu grid expand to fill the entire parent window
+        self.grid_columnconfigure(0, weight=1)
 
-        # Left-side label
-        label = tk.Label(self, text="Select A Menu", font=("Helvetica", 24), bg="lightgray", anchor="center")
-        label.grid(row=0, column=0, rowspan=4, sticky="nsew", padx=10, pady=10)
+	       self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=3)
+
+        # Title
+        label = tk.Label(self, text="Welcome Home!", font=("Rockwell", 42), anchor="center")
+        label.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=10, pady=(50,0))
+
+        # Button Container
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=1, column=0, sticky="nsew", padx=200, pady=0)
+
+        # Adjust the grid inside the button_frame to center the buttons
+        button_frame.grid_columnconfigure(0, weight=1)
+        button_frame.grid_columnconfigure(1, weight=1)
+        button_frame.grid_rowconfigure(0, weight=1)
+        button_frame.grid_rowconfigure(1, weight=1)
+
+        # Load Images (Ensure the images exist in the same directory)
+        def load_image(path, size=100):
+            img = tk.PhotoImage(file=path)
+            return img.subsample(img.width() // size, img.height() // size)
+
+        self.img_temperature = load_image("/home/capstone/gui/photos/temperature_icon.png")
+        self.img_camera = load_image("/home/capstone/gui/photos/camera_icon.png")
+        self.img_propane = load_image("/home/capstone/gui/photos/propane_icon.png")
+        self.img_water = load_image("/home/capstone/gui/photos/water_icon.png")
 
         # Buttons
-        btn_temperature = tk.Button(self, text="View Temperature", font=("Helvetica", 14), bg="lightyellow",
-                                     command=lambda: controller.show_page("TemperaturePage"))
-        btn_temperature.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        buttons = [
+            ("Temperature", self.img_temperature, "TemperaturePage"),
+            ("Camera", self.img_camera, "CameraPage"),
+            ("Propane", self.img_propane, "PropanePage"),
+            ("Water", self.img_water, "WaterPage")
+        ]
 
-        btn_camera = tk.Button(self, text="View Camera Feed", font=("Helvetica", 14), bg="lightblue",
-                                command=lambda: controller.show_page("CameraPage"))
-        btn_camera.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
+        for i, (text, img, page) in enumerate(buttons):
+            row, col = divmod(i, 2)
+            btn = tk.Button(button_frame, image=img, text=text, compound="top",
+                            font=("Rockwell", 14), bg="white", fg="black",
+                            command=lambda p=page: controller.show_page(p))
+            btn.grid(row=row, column=col, sticky="nsew", padx=20, pady=50)
 
-        btn_propane = tk.Button(self, text="View Propane Tank Levels", font=("Helvetica", 14), bg="lightgreen",
-                                 command=lambda: controller.show_page("PropanePage"))
-        btn_propane.grid(row=2, column=1, sticky="nsew", padx=10, pady=10)
+        # Center the button_frame inside MainMenu by configuring the column and row
+        self.grid_rowconfigure(1, weight=3, minsize=100)  # Extra space for centering vertically
+        self.grid_columnconfigure(0, weight=1)  # Center horizontally
 
-        btn_water = tk.Button(self, text="View Water Tank Levels", font=("Helvetica", 14), bg="#DDA0DD",
-                               command=lambda: controller.show_page("WaterPage"))
-        btn_water.grid(row=3, column=1, sticky="nsew", padx=10, pady=10)
 
-# temperature class page
+
 class TemperaturePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
@@ -124,28 +158,28 @@ class TemperaturePage(ttk.Frame):
         # Update data
         update_data(self, temp1_label_var, temp2_label_var)
 
-# camera page class
+
 class CameraPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Camera Feed Page", font=("Helvetica", 20)).pack(pady=20)
-        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
-# propane tank page class
+
 class PropanePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Propane Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
-        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
-# water tank page class
+
 class WaterPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Water Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
-        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
-# runs the application
+
 if __name__ == "__main__":
     app = MainApp()
     app.mainloop()
