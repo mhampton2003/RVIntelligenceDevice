@@ -1,0 +1,33 @@
+# =================================================================
+#  RV Intelligence Device
+#  Emmanuel Loria, Jordan Krause, Maya Hampton
+#  Date 2/10/2025
+#  yaml file that reads water tank level and temperature from Mopeka
+#  https://esphome.io/components/sensor/mopeka_pro_check
+#     > esphome documentation to read data from sensor
+# =================================================================
+
+esphome:
+  name: mopeka_ble
+  platform: ESP32
+  board: esp32dev
+
+esp32_ble_tracker:
+
+sensor:
+  - platform: mopeka_pro_check
+    mac_address: DA:53:DE:F3:55:C7
+    tank_type: CUSTOM
+    custom_distance_full: 11.1cm
+    custom_distance_empty: 1mm
+    temperature:
+        name: "Water Temperature"
+    level:
+        name: "Water Level"
+        filters:
+         - lambda: |-
+             if (x >= 9.0) return x * 0.98;
+             if (x >= 6.0) return x * 0.92;
+             if (x >= 3.0) return x * 0.85;
+             return x * 0.80;
+logger:
