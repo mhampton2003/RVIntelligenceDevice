@@ -13,6 +13,10 @@ from tkinter import ttk
 import random
 import serial
 import time
+import cv2
+import threading
+import threads
+from PIL import Image, ImageTk
 
 # assigning ESP32s to a serial port
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
@@ -186,8 +190,77 @@ class TemperaturePage(ttk.Frame):
 class CameraPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
-        ttk.Label(self, text="Camera Feed Page", font=("Helvetica", 20)).pack(pady=20)
+        self.controller = controller
+
+        self.label = tk.Label(self, text="ESP32-CAM Stream", font=("Helvetica", 20))
+        self.label.pack(pady=10)
+
+        self.video_label = tk.Label(self)
+        self.video_label.pack()
+
+        self.start_button = ttk.Button(self, text="Start Stream", command=self.start_stream)
+        self.start_button.pack(pady=5)
+
+        self.stop_button = ttk.Button(self, text="Stop Stream", command=self.stop_stream)
+        self.stop_button.pack(pady=5)
+
+        self.back_button = ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu"))
+        self.back_button.pack(pady=10)
+
+        self.running = False
+        self.cap = None
+
+    def start_stream(self):
+        """Starts the ESP32-CAM video stream."""
+        if not self.running:
+            self.running = True
+            self.thread = threading.Thread(target=self.update_frame, daemon=True)
+            self.thread.start()
+
+    def update_frame(self):
+        """Fetch frames from ESP32-CAM and display in Tkinter."""
+        self.cap = cv2.VideoCapture(ESP32_CAM_URL)
+
+        if not self.cap.isOpened():
+            print("❌ Error: Unable to connect to ESP32-CAM stream.")
+            self.running = False
+            return
+
+        while self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                img = ImageTk.PhotoImage(img)
+                self.video_label.configure(image=img)
+                self.video_label.image = img
+            else:
+                print("⚠️ Failed to retrieve frame")
+
+        self.cap.release()
+
+    def stop_stream(self):
+        """Stops the ESP32-CAM video stream."""
+        self.running = False
+        if self.cap:
+            self.cap.release()
+
+# Other Pages
+class PropanePage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        ttk.Label(self, text="Propane Tank Levels", font=("Helvetica", 20)).pack(pady=20)
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+
+class WaterPage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        ttk.Label(self, text="Water Tank Levels", font=("Helvetica", 20)).pack(pady=20)
+
+        self.water_level_var = tk.StringVar()
+        ttk.Label(self, textvariable=self.water_level_var).pack(pady=10)
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        update_tank_level(self.water_level_var, self)
 
 
 class PropanePage(ttk.Frame):
