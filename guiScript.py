@@ -18,6 +18,30 @@ import time
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
 esp2 = serial.Serial('/dev/rfcomm2', 115200, timeout=1)
 
+# read value from water tank
+def read_tank_level():
+    try:
+       with open("output.txt", "r") as file:
+           lines = file.readlines()
+           for i, line in enumerate(lines):
+               if "Sending state" in line:
+                  words = line.split()
+                  if len(words) > 2:
+                     try:
+                        sensor_level = float(words[5])
+                        return words[5][:5] + " %"
+                     except ValueError:
+                         return "NA"
+       return "NA"
+    except FileNotFoundError:
+       return "File Not Found" 
+
+# continuously update values from water tank
+def update_tank_level(label_var, page):
+    water_level = read_tank_level()
+    label_var.set(f"Water Tank Level: {water_level}")
+    page.after(2000, lambda: update_tank_level(label_var, page))
+
 
 # gets the data from the various sensors
 def fetch_data():
@@ -177,7 +201,15 @@ class WaterPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         ttk.Label(self, text="Water Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
+
+        self.water_level_var = tk.StringVar()
+        self.water_level_var.set("Water Tank Level: -- %")
+
+        ttk.Label(self, textvariable=self.water_level_var, font=("Helvetica", 16)).pack(pady=20)
+
+
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        update_tank_level(self.water_level_var, self)
 
 
 if __name__ == "__main__":
