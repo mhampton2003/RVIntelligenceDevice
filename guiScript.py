@@ -18,17 +18,19 @@ import threading
 import threads
 from PIL import Image, ImageTk
 
+ESP32_CAM_URL = "http://172.20.10.4/stream"  # ESP32-CAM IP
+
 # assigning ESP32s to a serial port
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
 esp2 = serial.Serial('/dev/rfcomm2', 115200, timeout=1)
 
 # read value from water tank
-def read_tank_level():
+def read_water_level():
     try:
        with open("output.txt", "r") as file:
            lines = file.readlines()
            for i, line in enumerate(lines):
-               if "Sending state" in line:
+               if "'Water Level': Sending state" in line:
                   words = line.split()
                   if len(words) > 2:
                      try:
@@ -41,10 +43,34 @@ def read_tank_level():
        return "File Not Found" 
 
 # continuously update values from water tank
-def update_tank_level(label_var, page):
-    water_level = read_tank_level()
+def update_water_level(label_var, page):
+    water_level = read_water_level()
     label_var.set(f"Water Tank Level: {water_level}")
-    page.after(2000, lambda: update_tank_level(label_var, page))
+    page.after(2000, lambda: update_water_level(label_var, page))
+
+# read value from propane tank
+def read_propane_level():
+    try:
+       with open("output.txt", "r") as file:
+           lines = file.readlines()
+           for i, line in enumerate(lines):
+               if "'Propane Level': Sending state" in line:
+                  words = line.split()
+                  if len(words) > 2:
+                     try:
+                        sensor_level = float(words[5])
+                        return words[5][:5] + " %"
+                     except ValueError:
+                         return "NA"
+       return "NA"
+    except FileNotFoundError:
+       return "File Not Found" 
+
+# continuously update values from propane tank
+def update_propane_level(label_var, page):
+    propane_level = read_propane_level()
+    label_var.set(f"Propane Tank Level: {propane_level}")
+    page.after(2000, lambda: update_propane_level(label_var, page))
 
 
 # gets the data from the various sensors
@@ -82,27 +108,48 @@ class MainApp(tk.Tk):
         super().__init__()
         self.title("Main Menu")
         self.attributes("-fullscreen", True)
-        self.configure(bg="#004d00")  # Dark green background
-        self.wm_attributes("-alpha", 0.8)  # Set transparency to 80%
+        # Create a Canvas for the border
+        self.canvas = tk.Canvas(self, highlightthickness=0, bg="white")
+        self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
 
-        self.container = ttk.Frame(self)
-        self.container.pack(expand=True, fill="both")
-        self.container.configure(style="Main.TFrame")
-      
-	self.pages = {}
+        # Create a container for the border
+        self.border_container = ttk.Frame(self, relief="solid", padding=10)
+        self.border_container.place(x=10, y=10, relwidth=1, relheight=1, anchor="nw", width=-20, height=-20)
 
+        # Green-bordered frame around the container
+        self.container_frame = ttk.Frame(self.border_container, padding=5)
+        self.container_frame.pack(fill="both", expand=True)
+
+        # Main container for pages with green border
+        self.container = tk.Frame(self.container_frame, bg="white", highlightbackground="dark green",
+                                  highlightthickness=4)
+        self.container.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.pages = {}
         for Page in (MainMenu, TemperaturePage, CameraPage, PropanePage, WaterPage):
             page_name = Page.__name__
             frame = Page(parent=self.container, controller=self)
             self.pages[page_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        self.show_page("MainMenu")
-        self.bind("<Escape>", lambda event: self.attributes("-fullscreen", False))
+	self.show_page("MainMenu")
+	        self.bind("<Escape>", lambda event: self.attributes("-fullscreen", False))
+	        self.bind("<Configure>", self.draw_border)  # Redraw border when resized
+	
+    def draw_border(self, event=None):
+	self.canvas.delete("border")  # Clear previous border
+	width = self.winfo_width()
+	height = self.winfo_height()
+	margin = 40
+
+	self.canvas.create_rectangle(
+	    margin, margin, width - margin, height - margin,
+	    outline="dark green", width=4, tags="border"
+	)
 
     def show_page(self, page_name):
-        frame = self.pages[page_name]
-        frame.tkraise()
+	frame = self.pages[page_name]
+	frame.tkraise()
 
 
 class MainMenu(ttk.Frame):
@@ -114,7 +161,7 @@ class MainMenu(ttk.Frame):
         # Make the MainMenu grid expand to fill the entire parent window
         self.grid_columnconfigure(0, weight=1)
 
-	       self.grid_rowconfigure(0, weight=1)
+	self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=3)
 
         # Title
@@ -123,7 +170,7 @@ class MainMenu(ttk.Frame):
 
         # Button Container
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=1, column=0, sticky="nsew", padx=200, pady=0)
+        button_frame.grid(row=1, column=0, sticky="nsew", padx=293, pady=0)
 
         # Adjust the grid inside the button_frame to center the buttons
         button_frame.grid_columnconfigure(0, weight=1)
@@ -154,7 +201,7 @@ class MainMenu(ttk.Frame):
             btn = tk.Button(button_frame, image=img, text=text, compound="top",
                             font=("Rockwell", 14), bg="white", fg="black",
                             command=lambda p=page: controller.show_page(p))
-            btn.grid(row=row, column=col, sticky="nsew", padx=20, pady=50)
+            btn.grid(row=row, column=col, sticky="nsew", padx=20, pady=26.5)
 
         # Center the button_frame inside MainMenu by configuring the column and row
         self.grid_rowconfigure(1, weight=3, minsize=100)  # Extra space for centering vertically
@@ -245,36 +292,10 @@ class CameraPage(ttk.Frame):
         if self.cap:
             self.cap.release()
 
-# Other Pages
-class PropanePage(ttk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
-        ttk.Label(self, text="Propane Tank Levels", font=("Helvetica", 20)).pack(pady=20)
-        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
 
 class WaterPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
-        ttk.Label(self, text="Water Tank Levels", font=("Helvetica", 20)).pack(pady=20)
-
-        self.water_level_var = tk.StringVar()
-        ttk.Label(self, textvariable=self.water_level_var).pack(pady=10)
-        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
-        update_tank_level(self.water_level_var, self)
-
-
-class PropanePage(ttk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
-        ttk.Label(self, text="Propane Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
-        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
-
-
-class WaterPage(ttk.Frame):
-    def __init__(self, parent, controller):
-        super().__init__(parent)
-        ttk.Label(self, text="Water Tank Levels Page", font=("Helvetica", 20)).pack(pady=20)
-
         self.water_level_var = tk.StringVar()
         self.water_level_var.set("Water Tank Level: -- %")
 
@@ -282,7 +303,20 @@ class WaterPage(ttk.Frame):
 
 
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
-        update_tank_level(self.water_level_var, self)
+        update_water_level(self.water_level_var, self)
+
+
+class PropanePage(ttk.Frame):
+    def __init__(self, parent, controller):
+        super().__init__(parent)
+        self.propane_level_var = tk.StringVar()
+        self.propane_level_var.set("Propane Tank Level: -- %")
+
+        ttk.Label(self, textvariable=self.propane_level_var, font=("Helvetica", 16)).pack(pady=20)
+
+
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
+        update_propane_level(self.propane_level_var, self)
 
 
 if __name__ == "__main__":
