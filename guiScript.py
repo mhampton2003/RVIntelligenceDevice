@@ -20,29 +20,32 @@ from PIL import Image, ImageTk
 
 ESP32_CAM_URL = "http://172.20.10.4/stream"  # ESP32-CAM IP
 
-# assigning ESP32s to a serial port
+# assign ESP32 to serial port rfcomm1
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
-esp2 = serial.Serial('/dev/rfcomm2', 115200, timeout=1)
 
-# read value from water tank
+# reads the level of the water tank using text file
 def read_water_level():
+    # open text file
     try:
        with open("output.txt", "r") as file:
            lines = file.readlines()
+	   # find where water level data is at in file
            for i, line in enumerate(lines):
                if "'Water Level': Sending state" in line:
                   words = line.split()
                   if len(words) > 2:
+		     # return only the part of string that contains data
                      try:
                         sensor_level = float(words[5])
                         return words[5][:5] + " %"
                      except ValueError:
                          return "NA"
        return "NA"
+    # handle error if file cannot be opened
     except FileNotFoundError:
        return "File Not Found" 
 
-# continuously update values from water tank
+# updates the water tank level continuously
 def update_water_level(label_var, page):
     water_level = read_water_level()
     label_var.set(f"Water Tank Level: {water_level}")
@@ -72,35 +75,25 @@ def update_propane_level(label_var, page):
     label_var.set(f"Propane Tank Level: {propane_level}")
     page.after(2000, lambda: update_propane_level(label_var, page))
 
-
-# gets the data from the various sensors
+# gets the data from the DHT11 sensors
 def fetch_data():
-    temp1 = ""
-    temp2 = ""
-    temp1_raw = ""
-    temp2_raw = ""
-    temp1_value = ""
-    temp2_value = ""
-
+    temp, hum = "0", "0"
     # loop to continuously get temperature data
     while(True): 
-       if esp1.in_waiting > 0:
-          temp1_raw = esp1.readline().decode().strip()
-          temp1_value = temp1_raw.split()[0] + " F\n                      " + temp1_raw.split()[1] if temp1_raw else "NA"
-          temp1 = f"{temp1_value} %" 
-       if esp2.in_waiting > 0:
-          temp2_raw = esp2.readline().decode().strip()  
-          temp2_value = temp2_raw.split()[0] if temp2_raw else "NA"
-          temp2 = f"{temp2_value} F" 
-       return temp1, temp2
+       #if esp1.in_waiting > 0:
+       temp_raw = esp1.readline().decode().strip()
+       temp = temp_raw.split()[0] if temp_raw else "00"
+       hum = temp_raw.split()[1] if temp_raw else "00" 
+       time.sleep(2)
+       return temp, hum
 
 # updates the temperature on the screen 
-def update_data(page, temp1_label_var, temp2_label_var):
+def update_data(page, temp_label_var, hum_label_var):
     # get updated data, set the variable, print the data to the screen every 2 seconds
-    temp1, temp2 = fetch_data()
-    temp1_label_var.set(f"Cabin Temperature: {temp1}")
-    temp2_label_var.set(f"Fridge Temperature: {temp2}")
-    page.after(2000, lambda: update_data(page, temp1_label_var, temp2_label_var))
+    temp, hum = fetch_data()
+    temp_label_var.set(f"Temperature: {temp}")
+    hum_label_var.set(f"Humidity: {hum}")
+    page.after(2000, lambda: update_data(page, temp_label_var, hum_label_var))
 
 # main application class for the GUI
 class MainApp(tk.Tk):
@@ -133,8 +126,8 @@ class MainApp(tk.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
 
 	self.show_page("MainMenu")
-	        self.bind("<Escape>", lambda event: self.attributes("-fullscreen", False))
-	        self.bind("<Configure>", self.draw_border)  # Redraw border when resized
+	self.bind("<Escape>", lambda event: self.attributes("-fullscreen", False))
+	self.bind("<Configure>", self.draw_border)  # Redraw border when resized
 	
     def draw_border(self, event=None):
 	self.canvas.delete("border")  # Clear previous border
@@ -160,7 +153,6 @@ class MainMenu(ttk.Frame):
 
         # Make the MainMenu grid expand to fill the entire parent window
         self.grid_columnconfigure(0, weight=1)
-
 	self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=3)
 
@@ -186,7 +178,7 @@ class MainMenu(ttk.Frame):
         self.img_temperature = load_image("/home/capstone/gui/photos/temperature_icon.png")
         self.img_camera = load_image("/home/capstone/gui/photos/camera_icon.png")
         self.img_propane = load_image("/home/capstone/gui/photos/propane_icon.png")
-        self.img_water = load_image("/home/capstone/gui/photos/water_icon.png")
+        self.img_water = load_image("/home/capstone/gui/photos/water_icon_new.png")
 
         # Buttons
         buttons = [
@@ -201,37 +193,93 @@ class MainMenu(ttk.Frame):
             btn = tk.Button(button_frame, image=img, text=text, compound="top",
                             font=("Rockwell", 14), bg="white", fg="black",
                             command=lambda p=page: controller.show_page(p))
-            btn.grid(row=row, column=col, sticky="nsew", padx=20, pady=26.5)
+            btn.grid(row=row, column=col, sticky="nsew", padx=20, pady=25)
 
         # Center the button_frame inside MainMenu by configuring the column and row
         self.grid_rowconfigure(1, weight=3, minsize=100)  # Extra space for centering vertically
         self.grid_columnconfigure(0, weight=1)  # Center horizontally
 
 
-
 class TemperaturePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
 
-        # Styling
-        self.style = ttk.Style()
-        self.style.configure("TLabel", font=("Arial", 14))
-
         # Create data labels as strings
-        temp1_label_var = tk.StringVar()
-        temp2_label_var = tk.StringVar()
-        temp1_label_var.set("Temperature Sensor 1: -- C")
-        temp2_label_var.set("Temperature Sensor 2: -- C")
+        temp_label_var = tk.StringVar()
+        hum_label_var = tk.StringVar()
+        temp_label_var.set("Temperature: -- F")
+        hum_label_var.set("Humidity: -- %")
 
-        # Display data
-        ttk.Label(self, textvariable=temp1_label_var).pack(pady=10)
-        ttk.Label(self, textvariable=temp2_label_var).pack(pady=10)
+	self.label = tk.Label(self, text="Temperature & Humidity Levels", font=("Helvetica", 20))
+        self.label.pack(pady=25)
+
+        self.canvas = tk.Canvas(self, width=200, height=250)
+        self.canvas.pack()
+
+        # Load and resize thermometer image
+        self.therm_img = Image.open("/home/capstone/gui/photos/temperature_icon_new.png")
+        self.therm_img = self.therm_img.resize((200, 230))  # Resize to fit canvas
+        self.thermometer = ImageTk.PhotoImage(self.therm_img)
+
+	# Draw the progress bar first (underneath the image)
+        self.canvas.create_rectangle(95, 50, 105, 180, fill="white", outline="", tags="thermometer_fill")
+
+        # Display thermometer image on top
+        self.canvas.create_image(100, 130, image=self.thermometer)  # Centered placement
+
+        # Label for sensor percentage
+        self.value_label = tk.Label(self, text="0F", font=("Arial", 14), fg="black")
+        self.value_label.pack()
+
+        self.hum_label = tk.Label(self, text="0%", font=("Arial", 14), fg="black")
+        self.hum_label.pack()
 
         # Back button
-        ttk.Button(self, text="Back to Main Menu", command=lambda: controller.show_page("MainMenu")).pack(pady=20)
+        ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=20)
 
         # Update data
-        update_data(self, temp1_label_var, temp2_label_var)
+        update_data(self, temp_label_var, hum_label_var)
+        self.update_thermometer()
+
+
+    def update_thermometer(self):
+        """Updates the thermometer fill level dynamically."""
+        temp, hum = fetch_data()
+        fill_height = (int(float(temp)) / 100) * 92  # Adjust fill height for thermometer tube
+
+        # Determine color based on sensor value
+        if int(float(temp)) >=90:
+            color = "dark red"
+        elif int(float(temp)) >= 70:
+            color = "red"
+        elif int(float(temp)) >= 50:
+            color = "orange"
+        elif int(float(temp)) >= 30:
+            color = "skyblue"
+        elif int(float(temp)) >= 0:
+            color = "blue"
+        else:
+            color = "purple"
+
+        # Clear previous fill
+        self.canvas.delete("thermometer_fill")
+
+	# Fill the circular bulb at the bottom
+        self.canvas.create_oval(89, 167, 119, 199, fill=color, outline="", tags="thermometer_fill")  # Circle bulb
+
+        # Draw the thermometer column (rectangle) aligned with the bulb
+        bar_x1, bar_x2 = 100, 110  # Narrower column
+        bar_bottom = 168  # Start from the top of the bulb
+        bar_top = bar_bottom - fill_height  # Calculate height
+
+        self.canvas.create_rectangle(bar_x1, bar_top, bar_x2, bar_bottom, fill=color, outline="", tags="thermometer_fill")
+
+        # Update label (text always black)
+        self.value_label.config(text=f"{temp} F", fg="black")
+        self.hum_label.config(text=f"Humidity: {hum} %", fg="black")
+
+        # Call again after 1 second
+        self.after(1000, self.update_thermometer)
 
 
 class CameraPage(ttk.Frame):
@@ -269,7 +317,7 @@ class CameraPage(ttk.Frame):
         self.cap = cv2.VideoCapture(ESP32_CAM_URL)
 
         if not self.cap.isOpened():
-            print("❌ Error: Unable to connect to ESP32-CAM stream.")
+            print("Error: Unable to connect to ESP32-CAM stream.")
             self.running = False
             return
 
@@ -282,7 +330,7 @@ class CameraPage(ttk.Frame):
                 self.video_label.configure(image=img)
                 self.video_label.image = img
             else:
-                print("⚠️ Failed to retrieve frame")
+                print("Failed to retrieve frame")
 
         self.cap.release()
 
@@ -296,27 +344,107 @@ class CameraPage(ttk.Frame):
 class WaterPage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
-        self.water_level_var = tk.StringVar()
-        self.water_level_var.set("Water Tank Level: -- %")
+        self.label = tk.Label(self, text="Water Tank Level", font=("Helvetica", 20))
+        self.label.pack(pady=25)
 
-        ttk.Label(self, textvariable=self.water_level_var, font=("Helvetica", 16)).pack(pady=20)
+        # Canvas to show propane tank image and fill level
+        self.canvas = tk.Canvas(self, width=300, height=350)
+        self.canvas.pack()
 
+        # Load and display propane tank image
+        self.water_img = Image.open("/home/capstone/gui/photos/water_icon_new.png")
+        self.water_img = self.water_img.resize((275, 325))
+        self.water_tank = ImageTk.PhotoImage(self.water_img)
+        self.canvas.create_image(150, 175, image=self.water_tank)
 
+        # Label for sensor percentage
+        self.value_label = tk.Label(self, text="0%", font=("Arial", 14), fg="black")
+        self.value_label.pack()
+
+        # Back button
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
-        update_water_level(self.water_level_var, self)
+
+        # Start updating the progress bar
+        self.update_progress()
+
+    def update_progress(self):
+        """Updates the water tank fill level dynamically."""
+        sensor_value = read_water_level()
+
+        if sensor_value == "NA":
+           color = "red"
+           fill_height = 0
+        else:
+           sensor_value = int(float(sensor_value[:-3]))
+           fill_height = (sensor_value / 100) * 225  # Adjust fill height (tank area)
+           color = "green" if sensor_value >= 50 else "orange" if sensor_value >= 20 else "red"
+
+        # Clear previous fill
+        self.canvas.delete("progress")
+
+        # Draw the fill level inside the tank image
+        self.canvas.create_rectangle(35, 310 - fill_height, 249.5, 310, fill=color, outline="", tags="progress")
+
+        # Update label
+        self.value_label.config(text=f"{sensor_value}%", fg="black")
+
+        # Call again after 1 second
+        self.after(1000, self.update_progress)
+
 
 
 class PropanePage(ttk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
-        self.propane_level_var = tk.StringVar()
-        self.propane_level_var.set("Propane Tank Level: -- %")
+        self.controller = controller
+        self.label = tk.Label(self, text="Propane Tank Level", font=("Helvetica", 20))
+        self.label.pack(pady=25)
 
-        ttk.Label(self, textvariable=self.propane_level_var, font=("Helvetica", 16)).pack(pady=20)
+        # Canvas to show propane tank image and fill level
+        self.canvas = tk.Canvas(self, width=300, height=350)
+        self.canvas.pack()
 
+        # Load and display propane tank image
+        self.propane_img = Image.open("/home/capstone/gui/photos/propane_icon.png")
+        self.propane_img = self.propane_img.resize((275, 325))
+        self.propane_tank = ImageTk.PhotoImage(self.propane_img)
+        self.canvas.create_image(150, 175, image=self.propane_tank)
 
+        # Label for sensor percentage
+        self.value_label = tk.Label(self, text="0%", font=("Arial", 14), fg="black")
+        self.value_label.pack()
+
+        # Back button
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=10)
-        update_propane_level(self.propane_level_var, self)
+
+        # Start updating the progress bar
+        self.update_progress()
+	
+	    
+   def update_progress(self):
+        """Updates the propane tank fill level dynamically."""
+        sensor_value = read_propane_level()
+
+        if sensor_value == "NA":
+           color = "red"
+           fill_height = 0
+        else:
+           sensor_value = int(float(sensor_value[:-3]))
+           fill_height = (sensor_value / 100) * 75  # Adjust fill height (tank area)
+           color = "green" if sensor_value >= 50 else "orange" if sensor_value >= 20 else "red"
+
+        # Clear previous fill
+        self.canvas.delete("progress")
+
+        # Draw the fill level inside the tank image
+        self.canvas.create_rectangle(75, 255 - fill_height, 225, 255, fill=color, outline="", tags="progress")
+
+        # Update label
+        self.value_label.config(text=f"{sensor_value}%", fg="black")
+
+        # Call again after 1 second
+        self.after(1000, self.update_progress)
+
 
 
 if __name__ == "__main__":
