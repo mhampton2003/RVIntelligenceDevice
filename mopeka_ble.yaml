@@ -20,8 +20,6 @@ sensor:
     tank_type: CUSTOM
     custom_distance_full: 11.1cm
     custom_distance_empty: 1mm
-    temperature:
-        name: "Water Temperature"
     level:
         name: "Water Level"
         filters:
@@ -30,4 +28,12 @@ sensor:
              if (x >= 6.0) return x * 0.92;
              if (x >= 3.0) return x * 0.85;
              return x * 0.80;
+
+  - platform: mopeka_pro_check
+    mac_address: D3:89:69:6E:82:DC
+    tank_type: CUSTOM
+    custom_distance_full: 38cm
+    custom_distance_empty: 25mm
+    level:
+        name: "Propane Level"
 logger:
