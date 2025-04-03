@@ -74,26 +74,7 @@ def update_propane_level(label_var, page):
     propane_level = read_propane_level()
     label_var.set(f"Propane Tank Level: {propane_level}")
     page.after(2000, lambda: update_propane_level(label_var, page))
-
-# gets the data from the DHT11 sensors
-def fetch_data():
-    temp, hum = "0", "0"
-    # loop to continuously get temperature data
-    while(True): 
-       #if esp1.in_waiting > 0:
-       temp_raw = esp1.readline().decode().strip()
-       temp = temp_raw.split()[0] if temp_raw else "00"
-       hum = temp_raw.split()[1] if temp_raw else "00" 
-       time.sleep(2)
-       return temp, hum
-
-# updates the temperature on the screen 
-def update_data(page, temp_label_var, hum_label_var):
-    # get updated data, set the variable, print the data to the screen every 2 seconds
-    temp, hum = fetch_data()
-    temp_label_var.set(f"Temperature: {temp}")
-    hum_label_var.set(f"Humidity: {hum}")
-    page.after(2000, lambda: update_data(page, temp_label_var, hum_label_var))
+	
 
 # main application class for the GUI
 class MainApp(tk.Tk):
@@ -205,26 +186,25 @@ class TemperaturePage(ttk.Frame):
         super().__init__(parent)
 
         # Create data labels as strings
-        temp_label_var = tk.StringVar()
-        hum_label_var = tk.StringVar()
-        temp_label_var.set("Temperature: -- F")
-        hum_label_var.set("Humidity: -- %")
+        self.temp_label_var = tk.StringVar()
+        self.hum_label_var = tk.StringVar()
+        self.temp_label_var.set("0")
+        self.hum_label_var.set("0")
 
-	self.label = tk.Label(self, text="Temperature & Humidity Levels", font=("Helvetica", 20))
+        self.label = tk.Label(self, text="Temperature & Humidity Levels", font=("Helvetica", 20))
         self.label.pack(pady=25)
 
         self.canvas = tk.Canvas(self, width=200, height=250)
         self.canvas.pack()
 
         # Load and resize thermometer image
-        self.therm_img = Image.open("/home/capstone/gui/photos/temperature_icon_new.png")
+        self.therm_img = Image.open("/home/maya/gui/photos/temperature_icon_new.png")
         self.therm_img = self.therm_img.resize((200, 230))  # Resize to fit canvas
         self.thermometer = ImageTk.PhotoImage(self.therm_img)
 
-	# Draw the progress bar first (underneath the image)
+        # Draw the progress bar first (underneath the image)
         self.canvas.create_rectangle(95, 50, 105, 180, fill="white", outline="", tags="thermometer_fill")
-
-        # Display thermometer image on top
+	# Display thermometer image on top
         self.canvas.create_image(100, 130, image=self.thermometer)  # Centered placement
 
         # Label for sensor percentage
@@ -238,13 +218,25 @@ class TemperaturePage(ttk.Frame):
         ttk.Button(self, text="Back", command=lambda: controller.show_page("MainMenu")).pack(pady=20)
 
         # Update data
-        update_data(self, temp_label_var, hum_label_var)
+        self.fetch_data()
         self.update_thermometer()
+
+    def fetch_data(self):
+        temp, hum = "0", "0"
+        temp_raw = esp1.readline().decode().strip()
+        if temp_raw:
+        temp_values = temp_raw.split()
+            temp = temp_values[0] if len(temp_values) > 0 else "0"
+            hum = temp_values[1] if len(temp_values) > 1 else "0"
+        self.temp_label_var.set(f"{temp} F")
+        self.hum_label_var.set(f"{hum} %")
+        self.after(2000, self.fetch_data)
 
 
     def update_thermometer(self):
         """Updates the thermometer fill level dynamically."""
-        temp, hum = fetch_data()
+        temp = self.temp_label_var.get().split()[0]
+        hum = self.hum_label_var.get().split()[0]
         fill_height = (int(float(temp)) / 100) * 92  # Adjust fill height for thermometer tube
 
         # Determine color based on sensor value
@@ -252,7 +244,7 @@ class TemperaturePage(ttk.Frame):
             color = "dark red"
         elif int(float(temp)) >= 70:
             color = "red"
-        elif int(float(temp)) >= 50:
+ 	elif int(float(temp)) >= 50:
             color = "orange"
         elif int(float(temp)) >= 30:
             color = "skyblue"
@@ -264,15 +256,14 @@ class TemperaturePage(ttk.Frame):
         # Clear previous fill
         self.canvas.delete("thermometer_fill")
 
-	# Fill the circular bulb at the bottom
+        # Fill the circular bulb at the bottom
         self.canvas.create_oval(89, 167, 119, 199, fill=color, outline="", tags="thermometer_fill")  # Circle bulb
 
         # Draw the thermometer column (rectangle) aligned with the bulb
         bar_x1, bar_x2 = 100, 110  # Narrower column
         bar_bottom = 168  # Start from the top of the bulb
         bar_top = bar_bottom - fill_height  # Calculate height
-
-        self.canvas.create_rectangle(bar_x1, bar_top, bar_x2, bar_bottom, fill=color, outline="", tags="thermometer_fill")
+	self.canvas.create_rectangle(bar_x1, bar_top, bar_x2, bar_bottom, fill=color, outline="", tags="thermometer_fill")
 
         # Update label (text always black)
         self.value_label.config(text=f"{temp} F", fg="black")
