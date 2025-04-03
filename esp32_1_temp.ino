@@ -35,9 +35,7 @@ void loop() {
     float temp = dht.readTemperature();
     float humidity = dht.readHumidity();
     SerialBT.print((temp * 1.8) + 31);
-    SerialBT.print(" F ");
     SerialBT.print(humidity);
-    SerialBT.print(" % ");
     delay(2000);
 
   }
