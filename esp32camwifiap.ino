@@ -2,7 +2,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-// CAMERA MODEL - AI Thinker ESP32-CAM (explicitly defined)
+// CAMERA MODEL - AI Thinker ESP32-CAM 
 #define PWDN_GPIO_NUM     32
 #define RESET_GPIO_NUM    -1
 #define XCLK_GPIO_NUM      0
@@ -20,15 +20,15 @@
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-// Wi-Fi Access Point Credentials
-const char *ssid = "ESP32-CAM-AP";
-const char *password = "12345678";
+// Wi-Fi Credentials
+const char *ssid = "Franklin T10 4540";  
+const char *password = "98ba5c9a";  
 
 WebServer server(80);  // Web server on port 80
 
 // Function to serve the homepage with a link to the camera stream
 void handleRoot() {
-    String page = "<h1>ESP32-CAM AP Mode</h1>"
+    String page = "<h1>ESP32-CAM Connected to Hotspot</h1>"
                   "<p><a href='/stream'>Click here to view the camera stream</a></p>";
     server.send(200, "text/html", page);
 }
@@ -84,11 +84,10 @@ void initCamera() {
     config.pin_reset = RESET_GPIO_NUM;
     config.xclk_freq_hz = 20000000;
     config.pixel_format = PIXFORMAT_JPEG;
-    config.frame_size = FRAMESIZE_QVGA;  // Lower resolution for stability
-    config.jpeg_quality = 12;  // Medium quality for better performance
-    config.fb_count = 1;  // Reduce buffer count to avoid memory issues
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
 
-    // Ensure the camera framebuffer is correctly placed
     if (psramFound()) {
         config.fb_location = CAMERA_FB_IN_PSRAM;
         config.grab_mode = CAMERA_GRAB_LATEST;
@@ -97,7 +96,6 @@ void initCamera() {
         config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
     }
 
-    // Delay to ensure the ESP32 is stable before initializing the camera
     delay(2000);
 
     esp_err_t err = esp_camera_init(&config);
@@ -108,27 +106,43 @@ void initCamera() {
 
     Serial.println("Camera initialized successfully!");
 
-    // Get camera sensor and explicitly define it as OV2640
     sensor_t *s = esp_camera_sensor_get();
     if (s == NULL) {
         Serial.println("Failed to get camera sensor!");
         return;
     }
 
-    // Explicitly set sensor type and frame size
     s->set_framesize(s, FRAMESIZE_QVGA);
 }
 
 void setup() {
     Serial.begin(115200);
 
-    // Start Wi-Fi Access Point
-    WiFi.softAP(ssid, password);
-    IPAddress IP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
+    // Connect ESP32 to a phone's personal hotspot
+    Serial.print("Connecting to Hotspot: ");
+    Serial.println(ssid);
+    
+    WiFi.begin(ssid, password);
+    
+    int timeout = 30; // Timeout after 30 seconds
+    while (WiFi.status() != WL_CONNECTED && timeout > 0) {
+        delay(1000);
+        Serial.print(".");
+        timeout--;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nWi-Fi connected!");
+    } else {
+        Serial.println("\nFailed to connect. Restarting ESP32...");
+        ESP.restart();
+    }
+
+    IPAddress IP = WiFi.localIP();  // Get IP assigned by hotspot
+    Serial.print("ESP32 IP address: ");
     Serial.println(IP);
 
-    delay(2000);  // Ensure Wi-Fi is fully initialized
+    delay(2000);
 
     // Initialize Camera
     initCamera();
@@ -139,7 +153,7 @@ void setup() {
     server.begin();
 
     Serial.println("ESP32-CAM is ready!");
-    Serial.print("Connect to WiFi AP and visit: http://");
+    Serial.print("Visit: http://");
     Serial.println(IP);
 }
 
