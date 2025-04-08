@@ -18,7 +18,7 @@ import threading
 import threads
 from PIL import Image, ImageTk
 
-ESP32_CAM_URL = "http://172.20.10.4/stream"  # ESP32-CAM IP
+ESP32_CAM_URL = "http://192.168.0.144/stream"  # ESP32-CAM IP
 
 # assign ESP32 to serial port rfcomm1
 esp1 = serial.Serial('/dev/rfcomm1', 115200, timeout=1)
@@ -143,7 +143,7 @@ class MainMenu(ttk.Frame):
 
         # Button Container
         button_frame = ttk.Frame(self)
-        button_frame.grid(row=1, column=0, sticky="nsew", padx=293, pady=0)
+        button_frame.grid(row=1, column=0, sticky="nsew", padx=291, pady=0)
 
         # Adjust the grid inside the button_frame to center the buttons
         button_frame.grid_columnconfigure(0, weight=1)
@@ -295,41 +295,47 @@ class CameraPage(ttk.Frame):
 
         self.running = False
         self.cap = None
+	self.frame = None
 
     def start_stream(self):
         """Starts the ESP32-CAM video stream."""
         if not self.running:
             self.running = True
-            self.thread = threading.Thread(target=self.update_frame, daemon=True)
-            self.thread.start()
+            self.cap = cv2.VideoCapture(ESP32_CAM_URL)
+            if not self.cap.isOpened():
+                print("Error: Unable to connect to ESP32-CAM stream.")
+                self.running = False
+                return
+            self.update_frame()
 
     def update_frame(self):
-        """Fetch frames from ESP32-CAM and display in Tkinter."""
-        self.cap = cv2.VideoCapture(ESP32_CAM_URL)
-
-        if not self.cap.isOpened():
-            print("Error: Unable to connect to ESP32-CAM stream.")
-            self.running = False
-            return
-
-        while self.running:
+        if self.running and self.cap:
             ret, frame = self.cap.read()
             if ret:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 img = Image.fromarray(frame)
                 img = ImageTk.PhotoImage(img)
+
                 self.video_label.configure(image=img)
-                self.video_label.image = img
+                self.video_label.image = img  # Keep reference
+
             else:
                 print("Failed to retrieve frame")
 
-        self.cap.release()
+            # Schedule next frame update
+            self.after(10, self.update_frame)
+        else:
+            # If the stream was stopped
+            if self.cap:
+                self.cap.release()
+                self.cap = None
+            self.video_label.config(image='')
+            self.video_label.image = None
+
 
     def stop_stream(self):
         """Stops the ESP32-CAM video stream."""
         self.running = False
-        if self.cap:
-            self.cap.release()
 
 
 class WaterPage(ttk.Frame):
