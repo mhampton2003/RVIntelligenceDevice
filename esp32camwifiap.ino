@@ -122,7 +122,7 @@ void setup() {
     Serial.print("Connecting to Hotspot: ");
     Serial.println(ssid);
     
-    WiFi.begin(ssid, password);
+    WiFi.begin(ssid);
     
     int timeout = 30; // Timeout after 30 seconds
     while (WiFi.status() != WL_CONNECTED && timeout > 0) {
